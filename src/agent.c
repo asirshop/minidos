@@ -21,10 +21,21 @@
 #include <errno.h>
 #include <ctype.h>
 
-#define MEM_DIR     "/mem"
-#define CHUNK_DIR   "/mem/chunks"
-#define INDEX_FILE  "/mem/index.txt"
-#define CFG_FILE    "/mem/agent.conf"
+/* 记忆库位置: 环境变量 MINIDOS_MEM 可覆盖(手机Termux用), 默认 /mem */
+static char MEM_DIR_[256];
+static const char *MEM_DIR;
+static const char *CHUNK_DIR;
+static const char *INDEX_FILE;
+static const char *CFG_FILE;
+static void mem_paths_init(void){
+    const char *env=getenv("MINIDOS_MEM");
+    snprintf(MEM_DIR_,sizeof MEM_DIR_,"%s",env&&env[0]?env:"/mem");
+    MEM_DIR=MEM_DIR_;
+    static char b1[300],b2[300],b3[300];
+    snprintf(b1,sizeof b1,"%s/chunks",MEM_DIR_);  CHUNK_DIR=b1;
+    snprintf(b2,sizeof b2,"%s/index.txt",MEM_DIR_); INDEX_FILE=b2;
+    snprintf(b3,sizeof b3,"%s/agent.conf",MEM_DIR_); CFG_FILE=b3;
+}
 #define CTX_FILE    "/tmp/agent_ctx.txt"
 
 #define MAX_LINE    2048
@@ -1148,6 +1159,7 @@ static void search_mem(const char *kw){
 }
 
 int main(int argc, char **argv){
+    mem_paths_init();
     cfg_load();
     mem_init();
     mem_load_index();
