@@ -1,0 +1,25 @@
+# 内核源码树 (单独管理, 不进本仓库)
+ksrc/
+# 下载缓存与产物
+dl/
+initramfs/
+iso/
+*.iso
+initrd.gz
+vmlinuz-custom
+bzImage
+app-*
+# 编译中间产物
+*.o
+*.cmd
+# QEMU 测试临时文件
+*.ppm
+*.sock
+vmlinuz
+src/agent
+src/desktop
+src/snake
+src/t2048
+src/tetris
+src/g2048
+src/fbshim

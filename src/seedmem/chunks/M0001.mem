@@ -1,0 +1,11 @@
+# MiniDOS 是什么
+@id M0001
+@tags intro,system,origin
+@time 2026-11-05
+
+MiniDOS 1.0 是一个从零构建的可启动文字+图形操作系统, 装入 U 盘后电脑开机直进, 不经过 Windows/其他系统。
+体积 21MB, 开机 1.3 秒。分阶段构建:
+ 1) 文字系统 (DOS 风格 shell + BusyBox + 文本浏览器 + 终端游戏)
+ 2) 图形桌面 (自研 Framebuffer GUI)
+ 3) 自定义内核
+ 4) 智能体 (就是现在的我)

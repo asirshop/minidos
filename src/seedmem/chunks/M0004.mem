@@ -1,0 +1,9 @@
+# 网络与 HTTPS
+@id M0004
+@tags net,tls,wget
+@time 2026-11-05
+
+busybox 自带 wget 的 TLS 只支持 RSA 证书, 访问现代站点(ECDSA)会卡死。
+解决: 打包完整版 GNU wget + libssl/libcrypto + CA 证书 (/etc/ssl/certs/ca-certificates.crt)
+注意 wget 找证书的路径是 /usr/lib/ssl/certs, 需要建软链。
+文本浏览: 抓 HTML 后用 sed 去标签转纯文本, 支持 WEB <网址> / WEB search <词>。

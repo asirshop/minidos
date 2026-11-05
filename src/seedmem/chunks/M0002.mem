@@ -1,0 +1,12 @@
+# 内核: 自定义编译 6.12.115
+@id M0002
+@tags kernel,build,compile
+@time 2026-11-05
+
+从 kernel.org 源码编译, 非发行版内核。配置要点:
+- 全静态编译, MODULES 关闭, 模块数 = 0
+- 关闭 USB/声音/蓝牙/无线/SCSI/IPv6/防火墙等无用子系统
+- 保留 DRM(simpledrm/bochs/virtio-gpu)、PS/2 键鼠、e1000/r8169/virtio_net、ext4/fat/iso9660
+- 内核 9.8MB, 编译耗时 7.5 分钟 (32 核并行)
+坑: 6.12 把 /dev/fb0 拆成独立选项 CONFIG_FB_DEVICE, 默认关闭, 必须显式打开否则图形桌面起不来。
+坑: DRM_FBDEV_EMULATION 要开, 否则 FB_CORE 不激活。

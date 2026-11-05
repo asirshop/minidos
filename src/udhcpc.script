@@ -1,0 +1,18 @@
+#!/bin/sh
+# udhcpc 事件脚本
+case "$1" in
+  deconfig)
+    ip addr flush dev "$interface" 2>/dev/null
+    ip link set "$interface" up
+    ;;
+  bound|renew)
+    ip addr flush dev "$interface" 2>/dev/null
+    ip addr add "$ip/${mask:-255.255.255.0}" dev "$interface" 2>/dev/null || ifconfig "$interface" "$ip" netmask "${mask:-255.255.255.0}"
+    ip link set "$interface" up
+    [ -n "$router" ] && for r in $router; do ip route add default via "$r" 2>/dev/null; done
+    : > /etc/resolv.conf
+    [ -n "$dns" ] && for d in $dns; do echo "nameserver $d" >> /etc/resolv.conf; done
+    [ -f /etc/resolv.conf ] || echo "nameserver 8.8.8.8" > /etc/resolv.conf
+    ;;
+esac
+exit 0

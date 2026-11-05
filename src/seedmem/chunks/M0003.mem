@@ -1,0 +1,11 @@
+# 图形桌面架构
+@id M0003
+@tags gui,framebuffer,design
+@time 2026-11-05
+
+自研 Framebuffer GUI, 约 900 行 C, 无 X11/Wayland/SDL 依赖。
+分层: 绘图层(putpx/fill_rect/round_rect/gradient) -> 字体 -> 控件 -> 窗口管理器 -> 应用
+直接操作 /dev/fb0 (mmap), 鼠标读 /dev/input/mice, 键盘读 evdev。
+字体: 内置 5x7 ASCII 点阵 + 270 字中文 14x14 点阵 (font_cn.c 由 Noto CJK 生成, 30KB)。
+应用: 终端/文件管理器/编辑器/时钟/计算器/贪吃蛇/2048/猜数字/井字棋/音乐。
+坑: round_frame 的 (dx==0&&dy==0) 条件在矩形内部恒真, 导致整个窗口被标题色填满。用 backtrace 定位。

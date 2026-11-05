@@ -1,0 +1,10 @@
+# 构建环境
+@id M0005
+@tags build,tools
+@time 2026-11-05
+
+构建脚本 /root/build/build.sh, 流程: 编译游戏和桌面 -> 组装 initramfs -> 打包 ISO (grub-mkrescue)。
+自定义内核源码在 /root/build/ksrc/linux-6.12.115, 配置脚本 /root/build/kconfig.sh。
+内核镜像 /root/build/vmlinuz-custom, 改完内核执行 cp arch/x86/boot/bzImage /root/build/vmlinuz-custom 再跑 build.sh。
+验证: qemu-system-x86_64 -m 512 -kernel vmlinuz -initrd initrd.gz -append 'console=ttyS0' -nographic
+图形验证: 加 -vga std -display none -monitor stdio, 用 screendump 截屏。

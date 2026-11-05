@@ -1,0 +1,218 @@
+#!/bin/busybox sh
+# ============================================================
+#  MiniDOS 1.0 — 可启动文字系统
+#  内核起来后第一个用户程序, 提供 DOS 风格命令行
+# ============================================================
+/bin/busybox --install -s /bin
+export PATH=/bin:/sbin
+mount -t proc proc /proc 2>/dev/null
+mount -t sysfs sysfs /sys 2>/dev/null
+mount -t devtmpfs devtmpfs /dev 2>/dev/null || mount -t devtmpfs none /dev 2>/dev/null
+mkdir -p /tmp /etc /mem/chunks
+echo root:x:0:0:root:/root:/bin/sh > /etc/passwd
+
+# ---- 驱动与网络 ----
+NETUP=0
+netup(){
+  if [ "$NETUP" = "1" ]; then echo "  网络已连接。"; return; fi
+  echo "  等待网卡就绪..."
+  sleep 2
+  IFACE=""
+  for i in /sys/class/net/*; do
+    n=$(basename "$i")
+    [ "$n" = "lo" ] && continue
+    IFACE="$n"; break
+  done
+  if [ -z "$IFACE" ]; then echo "  [失败] 未检测到网卡。虚拟机请用 virtio/e1000 网卡。"; return; fi
+  echo "  发现网卡 $IFACE, 正在 DHCP 获取 IP..."
+  ip link set "$IFACE" up 2>/dev/null || ifconfig "$IFACE" up
+  udhcpc -i "$IFACE" -n -q -t 4 -T 3 -s /usr/share/udhcpc/default.script >/dev/null 2>&1
+  if ip addr show "$IFACE" 2>/dev/null | grep -q 'inet '; then
+    NETUP=1; echo "  [OK] 网络已连接 ($IFACE)"
+  else
+    echo "  [失败] DHCP 未获取到地址。"
+  fi
+}
+
+# ---- 文本上网: 直接抓取 HTML 并在终端转为纯文本 ----
+html2text(){
+  tr '\n' ' ' | sed -e 's/<script[^>]*>.*<\/script>//g' \
+    -e 's/<style[^>]*>.*<\/style>//g' \
+    -e 's/<[^>]*>/\n/g' \
+    -e 's/&nbsp;/ /g' -e 's/&amp;/\&/g' -e 's/&lt;/</g' -e 's/&gt;/>/g' -e 's/&quot;/"/g' -e 's/&#39;/'"'"'/g' \
+    | sed 's/[ \t]\{2,\}/ /g' | grep -v '^[ \t]*$' | fold -s -w 100 | head -n 160
+}
+webtext(){ # $1 = url
+  [ "$NETUP" = "1" ] || netup
+  [ "$NETUP" = "1" ] || return 1
+  wget2 -q -O - --timeout=25 -U "Mozilla/5.0 (MiniDOS)" "$1" | html2text
+}
+
+# ---- 收藏夹 ----
+bm_wiki='https://www.wikipedia.org'
+bm_hn='https://news.ycombinator.com'
+bm_bing='https://www.bing.com'
+bm_gh='https://github.com'
+
+normalize_url(){
+  u="$1"
+  case "$u" in
+    wiki) echo "$bm_wiki";;
+    hn|news) echo "$bm_hn";;
+    bing) echo "$bm_bing";;
+    gh|github) echo "$bm_gh";;
+    search\ *|search:*) echo "https://lite.duckduckgo.com/lite/?q=$(echo "${u#search }" | sed 's/ /+/g')";;
+  esac
+}
+
+guess_game(){
+  ans=$(( (RANDOM % 100) + 1 )); tries=0
+  echo "  我已想好 1~100 之间的整数, 猜猜看 (q 退出)"
+  while :; do
+    printf "  你的猜测: "
+    read g
+    case "$g" in q|Q) echo "  答案是 $ans"; return;; esac
+    case "$g" in ''|*[!0-9]*) echo "  请输入数字"; continue;; esac
+    tries=$((tries+1))
+    if [ "$g" -lt "$ans" ]; then echo "  太小了! ↑"
+    elif [ "$g" -gt "$ans" ]; then echo "  太大了! ↓"
+    else echo "  *** 答对了! 共用 $tries 次 ***"; return; fi
+  done
+}
+
+show_help(){
+  cat <<'EOF'
+  MiniDOS 命令 (中英文均可):
+
+  ── 文件 ──
+    列目录 (ls)      看文件 <名> (cat)    目录树 (tree)
+  ── 系统 ──
+    版本 (ver)       日期 (date)    时间 (time)    清屏 (cls)
+    内存 (free)      进程 (ps)
+  ── 上网 ──
+    连网 (netup)     上网 <网址>    上网 搜 <关键词>
+  ── 游戏 ──
+    贪吃蛇 (snake)   二零四八 (2048)   猜数字 (guess)
+  ── 智能体 ──
+    智能体 (agent)   随系统一起成长的 AI
+  ── 桌面与电源 ──
+    桌面 (startx)    关机 (poweroff)   重启 (reboot)
+    linux            进入底层 Linux shell
+EOF
+}
+
+banner(){
+  echo "  __  __ _  _  __ ___  ___  ___"
+  echo " |  \\/  | || |/ /|_ _|/ __|/ __|   M i n i D O S  1 . 0"
+  echo " | |\\/| | __|  < |__|\\__ \\__ \\    可启动文字操作系统"
+  echo " |_|  |_|_||_|\_\|___|___/|___/"
+  echo
+  if [ -f /mem/index.txt ]; then
+    n=$(grep -vc '^#' /mem/index.txt 2>/dev/null || echo 0)
+    echo " 输入 帮助 查看命令, 输入 智能体 唤醒 AI (记忆 $n 条), 上网 <网址> 浏览网页!"
+  else
+    echo " 输入 帮助 查看命令, 输入 智能体 唤醒 AI, 上网 <网址> 浏览网页!"
+  fi
+}
+
+# ---- 智能体自启动 (grub 菜单: agent=on) ----
+AGENT_BOOT=0
+if grep -q 'agent=on' /proc/cmdline 2>/dev/null; then
+  AGENT_BOOT=1
+fi
+
+# ---- GUI 自启动 (grub 菜单第二项 mini=gui) ----
+if grep -q 'mini=gui' /proc/cmdline 2>/dev/null; then
+  if [ -e /dev/fb0 ]; then
+    exec /bin/desktop
+  fi
+  echo "  [!] mini=gui 但 /dev/fb0 不存在, 回退文字模式"
+fi
+
+if [ "$AGENT_BOOT" = "1" ]; then
+  echo "  启动 MiniDOS 智能体..."
+  /bin/agent
+fi
+
+# ---- 主循环 ----
+banner
+while :; do
+  printf 'C:\\> '
+  read cmd || { echo; exec sh; }
+  c=$(echo "$cmd" | tr 'A-Z' 'a-z')
+  set -- $cmd
+  c1=$(echo "$1" | tr 'A-Z' 'a-z')
+  [ -z "$c1" ] && continue
+  shift 2>/dev/null
+  case "$c1" in
+    help|?) show_help;;
+    dir|ls|列目录|目录) ls -la /root 2>/dev/null || ls -la /;;
+    帮助|指令) show_help;;
+    版本) ver(){ :; }; echo "MiniDOS 1.0 汉字版 (内核 $(uname -r))";;
+    看文件|显示|类型) cat "$@" 2>/dev/null || echo "文件未找到";;
+    清屏|清除) printf '\033[2J\033[H';;
+    日期) date;;
+    时间) date +%T;;
+    目录树|树) find . -not -path '*/sys/*' -not -path '*/proc/*' | head -40;;
+    连网|联网) netup;;
+    上网|浏览|网) 
+      [ -z "$1" ] && { echo "用法: 上网 <网址> | 上网 搜 <词> | 上网 站点"; continue; }
+      if [ "$1" = "搜" ] || [ "$1" = "搜索" ]; then shift; u="https://lite.duckduckgo.com/lite/?q=$(echo "$*" | sed 's/ /+/g')"; 
+      else u=$(normalize_url "$*"); [ -z "$u" ] && u="$1"; fi
+      echo "  正在获取 $u ..."
+      webtext "$u" || echo "  [失败] 请先 连网";;
+    玩|游戏) echo "游戏: 贪吃蛇 | 二零四八(2048) | 猜数字 | 井字棋";;
+    贪吃蛇) /bin/snake;;
+    二零四八) /bin/t2048;;
+    猜数字) guess_game;;
+    井字棋) echo "文字版井字棋请用 TICTAC (图形版在桌面)";;
+    智能体|智能|小智) /bin/agent "$@";;
+    桌面|图形) modprobe -a ttm drm_ttm_helper bochs 2>/dev/null; /bin/desktop && echo "  已返回文字系统";;
+    关机) echo o > /proc/sysrq-trigger 2>/dev/null || poweroff -f;;
+    重启) echo b > /proc/sysrq-trigger 2>/dev/null || reboot -f;;
+    cd) cd "${1:-/}" 2>/dev/null || echo "路径不存在";;
+    pwd) pwd;;
+    type|cat) cat "$@" 2>/dev/null || echo "文件未找到";;
+    tree) find . -not -path '*/sys/*' -not -path '*/proc/*' | head -40;;
+    cls|clear) printf '\033[2J\033[H';;
+    date) date;;
+    time) date +%T;;
+    ver) echo "MiniDOS Version 1.0  (Linux 内核 $(uname -r))";;
+    echo) echo "$@";;
+    free) free -m 2>/dev/null || cat /proc/meminfo | head -5;;
+    ps) ps;;
+    uname) uname -a;;
+    ifconfig) ip addr 2>/dev/null || ifconfig -a;;
+    netup) netup;;
+    web|browse|go|www)
+      [ -z "$1" ] && { echo "用法: WEB <网址> | WEB search <词> | WEB wiki|hn|bing|gh"; continue; }
+      u=$(normalize_url "$*")
+      [ -z "$u" ] && u="$1"
+      echo "  正在获取 $u ..."
+      webtext "$u" || echo "  [失败] 无法访问, 请先 NETUP"
+      ;;
+    ifr|links|lynx)
+      echo "  图形浏览器不可用, 本系统仅文本模式。试试: WEB <网址>";;
+    startx|x|gui)
+      echo "  加载显示驱动..."
+      if [ ! -e /dev/fb0 ]; then
+        echo "  未检测到 /dev/fb0 (需要 UEFI 启动或 QEMU -device VGA)"
+      fi
+      echo "  启动 MiniDOS 图形桌面 (Ctrl+Alt+Backspace 或关闭所有窗口退出... 输入 exit 后可回)"
+      /bin/desktop
+      echo "  已返回文字系统。"
+      ;;
+    agent|ai|ask)
+      /bin/agent "$@"
+      ;;
+    snake|game1) /bin/snake;;
+    2048|game2) /bin/t2048;;
+    guess|game3) guess_game;;
+    linux|sh|exit) echo "  进入 Linux shell (输入 minidos 或 reboot 返回)"; exec sh;;
+    minidos) exec /init ;;
+    reboot) echo b > /proc/sysrq-trigger 2>/dev/null || reboot -f;;
+    poweroff|halt) echo o > /proc/sysrq-trigger 2>/dev/null || poweroff -f;;
+    format|fdisk|mkfs) echo "危险命令被拦截! 请三思而后行 :)";;
+    *) echo "坏命令或文件名 — '$1'。输入 HELP 查看可用命令。";;
+  esac
+done
