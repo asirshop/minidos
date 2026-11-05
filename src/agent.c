@@ -608,6 +608,7 @@ static void print_help(void){
     printf("    /辩证 <议题>       正反合时四步辩证分析(灰度思维)\n");
     printf("    /改名 <新名字>      给智能体取名\n");
     printf("    /性别 <他|她|它|TA> 设定自称(默认 它)\n");
+    printf("    /验机               探测主机硬件与驱动绑定情况\n");
     printf("    /收藏 <网址> [备注] 收藏知识指针(只存网址不存正文)\n");
     printf("    /取用 <关键词>     按需取用收藏的知识(现场抓取)\n");
     printf("    /备份              导出全部记忆(tar.gz+人类可读目录)\n");
@@ -1073,6 +1074,50 @@ static void do_fetch(const char *arg){
 }
 
 
+
+/* ============ 验机: 主机硬件探测与驱动绑定报告 ============ */
+static void do_inspect(void){
+    printf(C_G "  == MiniDOS 主机验机报告 ==\n" C_RESET);
+    int ok=0, lack=0;
+    char report[4096]; size_t o=0;
+    o+=snprintf(report+o,sizeof report-o,"验机报告:\n");
+    /* PCI 设备: /sys/bus/pci/devices/XXXX:XX:XX.X -> vendor/device/driver */
+    DIR *d=opendir("/sys/bus/pci/devices");
+    if(d){ struct dirent *e;
+        while((e=readdir(d))){
+            if(e->d_name[0]=='.') continue;
+            char base[256]; snprintf(base,sizeof base,"/sys/bus/pci/devices/%s",e->d_name);
+            char ven[16]={0},dev[16]={0},cls[16]={0};
+            char p[300]; snprintf(p,sizeof p,"%s/vendor",base);
+            size_t n; char *t=read_all(p,&n); if(t){ snprintf(ven,sizeof ven,"%.*s",(int)(n-1),t); free(t); }
+            snprintf(p,sizeof p,"%s/device",base);
+            t=read_all(p,&n); if(t){ snprintf(dev,sizeof dev,"%.*s",(int)(n-1),t); free(t); }
+            snprintf(p,sizeof p,"%s/class",base);
+            t=read_all(p,&n); if(t){ snprintf(cls,sizeof cls,"%.*s",(int)(n-1),t); free(t); }
+            /* driver 绑定检查 */
+            snprintf(p,sizeof p,"%s/driver",base);
+            char drv[128]={0};
+            char buf[256]; ssize_t l=readlink(p,buf,sizeof buf-1);
+            if(l>0){ buf[l]=0; char *s=strrchr(buf,'/'); snprintf(drv,sizeof drv,"%s",s?s+1:buf); }
+            if(drv[0]){ ok++;
+                printf("  " C_G "[已驱动]" C_RESET " %s 类型%s 驱动:%s\n",e->d_name,cls,drv);
+                o+=snprintf(report+o,sizeof report-o,"已驱动 %s 驱动=%s\n",e->d_name,drv);
+            } else { lack++;
+                printf("  " C_Y "[无驱动]" C_RESET " %s 厂商%s 设备%s 类型%s\n",e->d_name,ven,dev,cls);
+                o+=snprintf(report+o,sizeof report-o,"无驱动 %s 厂商=%s 设备=%s\n",e->d_name,ven,dev);
+            } }
+        closedir(d); }
+    printf(C_G "  -------------------------\n" C_RESET);
+    printf(C_G "  已驱动 %d 项, 无驱动 %d 项。\n" C_RESET,ok,lack);
+    if(lack==0) printf(C_G "  所有硬件都被内核接管, 无需任何操作。\n" C_RESET);
+    else printf(C_DIM "  无驱动设备不影响其它硬件工作; 若是需要用的(网卡/显卡),\n"
+                    "  需要创造者重编内核补驱动(告知厂商/设备号即可)。\n" C_RESET);
+    o+=snprintf(report+o,sizeof report-o,"结论: 已驱动%d 无驱动%d\n",ok,lack);
+    mem_add("验机报告","验机,硬件,驱动",report);
+    printf(C_DIM "  (已入记忆)\n" C_RESET);
+}
+
+
 static void list_mem(void){
     if(index_n==0){ printf(C_DIM "  (还没有记忆)\n" C_RESET); return; }
     printf(C_G "  共 %d 条记忆:\n" C_RESET, index_n);
@@ -1181,6 +1226,9 @@ int main(int argc, char **argv){
                 }
                 printf(C_G "  返回命令行...\n" C_RESET);
                 execl("/bin/shellwrap","shellwrap",(char*)0);
+            }
+            else if(!strcmp(cmd,"/验机")||!strcmp(cmd,"/lspci")){
+                do_inspect();
             }
             else if(!strcmp(cmd,"/收藏")||!strcmp(cmd,"/mark")){
                 do_collect(rest);
