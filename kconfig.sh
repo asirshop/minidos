@@ -34,7 +34,16 @@ echo "[1] 基础配置: 精简 + 全静态"
   --enable KEYBOARD_ATKBD \
   --enable SERIO \
   --enable SERIO_I8042 \
-  --enable SERIO_LIBPS2
+  --enable SERIO_LIBPS2 \
+  --enable MOUSE_PS2_SMBUS \
+  --enable USB --enable USB_XHCI_HCD --enable USB_EHCI_HCD --enable USB_OHCI_HCD \
+  --enable HID --enable HID_SUPPORT --enable USB_HID --enable HID_GENERIC \
+  --enable FB --enable FB_EFI \
+  --enable EFI --enable EFI_STUB \
+  --enable SOUND --enable SND --enable SND_PCI --enable SND_HDA_INTEL \
+  --enable SND_HDA_CODEC_GENERIC --enable SND_HDA_CODEC_REALTEK --enable SND_HDA_CODEC_HDMI \
+  --enable SND_USB_AUDIO --enable SND_INTEL8X0 \
+  --enable DRM_VMWGFX
 
 echo "[2] 引导与内存"
 ./scripts/config --file .config \
