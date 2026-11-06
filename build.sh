@@ -71,16 +71,16 @@ mkdir -p $ISO/boot/grub
 cat > $ISO/boot/grub/grub.cfg <<'EOF'
 set timeout=0
 set default=0
-menuentry "MiniDOS 1.0" {
+menuentry "MiniDOS 1.0 (图形桌面, 开机即入)" {
+    linux /boot/vmlinuz quiet console=tty0 mini=gui
+    initrd /boot/initrd.gz
+}
+menuentry "MiniDOS 1.0 文字模式" {
     linux /boot/vmlinuz quiet console=tty0
     initrd /boot/initrd.gz
 }
 menuentry "MiniDOS 1.0 智能体模式" {
     linux /boot/vmlinuz quiet console=tty0 agent=on
-    initrd /boot/initrd.gz
-}
-menuentry "MiniDOS 1.0 图形桌面" {
-    linux /boot/vmlinuz quiet console=tty0 mini=gui
     initrd /boot/initrd.gz
 }
 menuentry "MiniDOS 1.0 (显示内核日志)" {
